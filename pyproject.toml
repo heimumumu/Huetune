@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esp32-media-controller"
+version = "0.3.7"
+requires-python = ">=3.11"
+dependencies = ["Pillow>=10,<13", "numpy>=1.26,<3", "pyserial>=3.5,<4", "psutil>=6,<8", "pystray>=0.19,<1", "pycaw>=20240210; sys_platform=='win32'", "winsdk>=1.0.0b10; sys_platform=='win32'", "pywebview>=6.2,<7; sys_platform=='win32'", "nvidia-ml-py>=12; sys_platform=='win32'"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyinstaller>=6"]
+
+[project.scripts]
+media-controller = "companion.app:main"
+
+[tool.setuptools]
+packages = ["companion"]
+
+[tool.setuptools.package-data]
+companion = ["assets/controller.png", "assets/controller.ico", "ui/status.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

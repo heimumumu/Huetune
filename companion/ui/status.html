@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP32 多媒体控制器</title>
+<style>
+:root{
+  --tint: 60,63,70; --a:.55; --fg:#fff; --mut:rgba(255,255,255,.72); --line:rgba(255,255,255,.22);
+  --ok:#3ccf7a; --warn:#f2b441; --err:#ef5b5b; --idle:#9aa0a8;
+  --paper:#f3f3f1; --ink:#17181b; --ink2:#5d6068; --rule:#dcdcd8;
+  --zh:"Microsoft YaHei UI","Microsoft YaHei","Noto Sans CJK SC","PingFang SC",sans-serif;
+  --num:"Bahnschrift","Segoe UI Variable Display","Segoe UI","Noto Sans CJK SC",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font-family:var(--zh);-webkit-font-smoothing:antialiased;user-select:none}
+.app{display:flex;flex-direction:column;height:100vh;min-height:420px}
+
+/* ---------- 上半部分：设备孪生 ---------- */
+.stage{position:relative;flex:1;overflow:hidden;color:var(--fg);background:rgb(var(--tint));isolation:isolate}
+.stage .blur{position:absolute;inset:-60px;background-size:cover;background-position:center;filter:blur(38px) saturate(1.25);transform:scale(1.1);opacity:0;transition:opacity .5s}
+.stage.has-cover .blur{opacity:1}
+.stage .veil{position:absolute;inset:0;background:rgba(var(--tint),var(--a));transition:background .5s}
+.stage.dark-text{--fg:#161616;--mut:rgba(22,22,22,.7);--line:rgba(22,22,22,.18)}
+
+.now{position:absolute;inset:0;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:30px;padding:30px 34px}
+.cover{width:min(43vw,236px);aspect-ratio:1;border-radius:16px;background:#6f737b center/cover;box-shadow:0 14px 34px rgba(0,0,0,.32);transition:transform .25s}
+.paused .cover{transform:scale(.9)}
+.meta{min-width:0;align-self:stretch;display:flex;flex-direction:column;padding:6px 0}
+.title{font-size:30px;line-height:1.2;font-weight:700;letter-spacing:.2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.artist{font-size:17px;color:var(--mut);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spacer{flex:1}
+.play{font-size:13px;font-weight:700;margin-bottom:10px}
+.bar{height:4px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--fg);border-radius:4px}
+.times{display:flex;justify-content:space-between;font:13px var(--num);color:var(--mut);margin-top:7px;font-variant-numeric:tabular-nums}
+
+/* 未连接 / 需要处理时的上半部分 */
+.notice{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;padding:34px 40px}
+.stage.mode-notice .now{display:none}
+.stage.mode-notice .notice{display:flex}
+.notice h1{margin:0;font-size:30px;line-height:1.25;font-weight:700}
+.notice p{margin:12px 0 0;font-size:15px;line-height:1.7;color:var(--mut);max-width:30em}
+.notice ol{margin:16px 0 0;padding:0;list-style:none;counter-reset:s;font-size:14px;line-height:1.6;color:var(--mut)}
+.notice li{counter-increment:s;display:flex;gap:10px;margin-top:6px}
+.notice li::before{content:counter(s);flex:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);font:12px/18px var(--num);text-align:center;color:var(--fg)}
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--idle);margin-right:10px;vertical-align:middle}
+.searching .pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.searching .pulse{animation:none}}
+
+/* ---------- 下半部分：状态栏 ---------- */
+.dock{flex:none;background:var(--paper);padding:16px 22px 18px;display:grid;grid-template-columns:minmax(0,1fr) auto;row-gap:12px;column-gap:18px;border-top:1px solid var(--rule)}
+.conn{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;min-width:0}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--idle)}
+.conn.ok .dot{background:var(--ok)} .conn.warn .dot{background:var(--warn)} .conn.err .dot{background:var(--err)}
+.conn small{font-weight:400;color:var(--ink2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vol{display:flex;align-items:center;gap:10px;justify-self:end;min-width:0;font-size:13px;color:var(--ink2);white-space:nowrap}
+.vol .vbar{width:84px;height:4px;border-radius:4px;background:var(--rule);overflow:hidden}
+.vol .vbar i{display:block;height:100%;background:var(--ink)}
+.vol b{font:600 14px var(--num);color:var(--ink);min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+.vol.muted b{color:var(--ink2)} .vol.muted .vbar i{background:var(--ink2)}
+.sys{grid-column:1;min-width:0;display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--ink2);white-space:nowrap;align-self:center}
+.sys span b{font:600 12px var(--num);color:var(--ink);margin-left:5px;font-variant-numeric:tabular-nums}
+.actions{grid-column:2;display:flex;gap:8px;justify-self:end}
+button{font:13px var(--zh);border-radius:8px;padding:7px 14px;border:1px solid var(--rule);background:#fff;color:var(--ink);cursor:pointer}
+button:hover{border-color:#bdbdb8}
+button:focus-visible{outline:2px solid #2f6fe4;outline-offset:2px}
+button.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+button.quiet{border-color:transparent;background:transparent;color:var(--ink2)}
+.hint{grid-column:1/-1;font-size:12px;color:var(--ink2);margin-top:-2px}
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="stage" id="stage">
+    <div class="blur" id="blur"></div>
+    <div class="veil"></div>
+    <div class="now" id="now">
+      <div class="cover" id="cover" role="img" aria-label="专辑封面"></div>
+      <div class="meta">
+        <div class="title" id="title"></div>
+        <div class="artist" id="artist"></div>
+        <div class="spacer"></div>
+        <div class="play" id="play"></div>
+        <div class="bar"><i id="prog"></i></div>
+        <div class="times"><span id="pos"></span><span id="rem"></span></div>
+      </div>
+    </div>
+    <div class="notice" id="notice">
+      <h1 id="nTitle"></h1>
+      <p id="nText"></p>
+      <ol id="nSteps"></ol>
+    </div>
+  </section>
+  <footer class="dock">
+    <div class="conn" id="conn"><span class="dot"></span><span id="connText"></span><small id="connSub"></small></div>
+    <div class="vol" id="vol"><span id="output" style="overflow:hidden;text-overflow:ellipsis;max-width:170px"></span><span class="vbar"><i id="vbar"></i></span><b id="vnum"></b></div>
+    <div class="sys" id="sys"></div>
+    <div class="actions">
+      <button class="quiet" id="btnLog">打开日志</button>
+      <button id="btnQuit">退出</button>
+      <button class="primary" id="btnHide">后台运行</button>
+    </div>
+    <div class="hint">关闭窗口后程序会留在右下角托盘，双击托盘图标可以再打开。</div>
+  </footer>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+/* 程序通过 window.render(state) 推送状态；pywebview 里按钮调用 window.pywebview.api.* */
+window.render = (s) => {
+  const st = $('stage');
+  st.style.setProperty('--tint', s.tint || '60,63,70');
+  st.style.setProperty('--a', s.alpha ?? .55);
+  st.classList.toggle('dark-text', !!s.darkText);
+  st.classList.toggle('has-cover', !!s.cover);
+  $('blur').style.backgroundImage = s.cover ? `url("${s.cover}")` : 'none';
+  const notice = s.notice;
+  st.classList.toggle('mode-notice', !!notice);
+  if (notice) {
+    $('nTitle').innerHTML = (notice.searching ? '<span class="pulse"></span>' : '') + notice.title;
+    st.classList.toggle('searching', !!notice.searching);
+    $('nText').textContent = notice.text || '';
+    $('nSteps').innerHTML = (notice.steps || []).map(x => `<li>${x}</li>`).join('');
+  } else {
+    $('cover').style.backgroundImage = s.cover ? `url("${s.cover}")` : 'none';
+    $('title').textContent = s.title || '没有正在播放的音乐';
+    $('artist').textContent = s.artist || '';
+    st.classList.toggle('paused', !s.playing);
+    $('play').textContent = s.playing ? '▶ 播放中' : '❚❚ 已暂停';
+    const dur = s.dur || 0, pos = s.pos || 0;
+    $('prog').style.width = dur ? (pos / dur * 100) + '%' : '0';
+    $('pos').textContent = dur ? fmt(pos) : '';
+    $('rem').textContent = dur ? '-' + fmt(dur - pos) : '';
+  }
+  const c = $('conn'); c.className = 'conn ' + (s.connState || '');
+  $('connText').textContent = s.connText || '';
+  $('connSub').textContent = s.connSub || '';
+  const v = $('vol'); v.style.visibility = s.volume == null ? 'hidden' : 'visible';
+  v.classList.toggle('muted', !!s.muted);
+  $('output').textContent = s.output || '';
+  $('vbar').style.width = (s.volume || 0) + '%';
+  $('vnum').textContent = s.muted ? '静音' : (s.volume ?? '') + '%';
+  $('sys').innerHTML = s.sys ? Object.entries(s.sys).map(([k, val]) => `<span>${k}<b>${val}</b></span>`).join('') : '';
+};
+const api = () => window.pywebview && window.pywebview.api;
+$('btnHide').onclick = () => api() && api().hide();
+$('btnLog').onclick = () => api() && api().open_log();
+$('btnQuit').onclick = () => api() && api().quit();
+/* 预览用的示例状态：index.html#playing / #paused / #waiting / #firmware / #busy */
+const DEMO = {
+  playing: { cover:'covers/a01.png', tint:'237,179,166', alpha:.55, darkText:true, title:'黄昏ラジオ', artist:'Hikari Kids', playing:true, pos:39, dur:214,
+    connState:'ok', connText:'已连接设备', connSub:'COM10 · 固件 0.3.5', output:'扬声器 (Realtek Audio)', volume:62, sys:{处理器:'12%', 内存:'48%', 显卡:'7%', 网速:'1.2 MB/s'} },
+  paused: { cover:'covers/a05.png', tint:'52,29,56', alpha:.55, darkText:false, title:'Cyber Bloom', artist:'Mira Sol', playing:false, pos:83, dur:203,
+    connState:'ok', connText:'已连接设备', connSub:'COM10 · 固件 0.3.5', output:'耳机 (WH-1000XM5)', volume:35, muted:true, sys:{处理器:'9%', 内存:'51%', 显卡:'3%', 网速:'0.2 MB/s'} },
+  idle: { notice:{ title:'没有正在播放的音乐', text:'在任意播放器里播放音乐，歌曲信息会同时显示在这里和触摸屏上。' },
+    connState:'ok', connText:'已连接设备', connSub:'COM11 · 固件 0.3.5', output:'耳机 (Realtek Audio)', volume:7, sys:{处理器:'6%', 内存:'44%', 显卡:'2%', 网速:'0.1 MB/s'} },
+  waiting: { notice:{ searching:true, title:'正在寻找设备', text:'把开发板接到电脑上，程序会自动连接，不用做别的。',
+      steps:['用支持数据传输的 USB 线连接开发板','确认开发板已经烧录控制器固件','连上后这里会显示正在播放的歌曲'] },
+    connState:'', connText:'等待设备', connSub:'正在扫描串口', output:'扬声器 (Realtek Audio)', volume:62 },
+  firmware: { notice:{ title:'开发板还没有控制器固件', text:'电脑已经识别到开发板，但它运行的是出厂程序，暂时收不到歌曲信息。',
+      steps:['按 README 里的“固件构建”步骤烧录固件','烧录完成后重新插拔 USB 线'] },
+    connState:'warn', connText:'需要烧录固件', connSub:'COM7 · 出厂程序', output:'扬声器 (Realtek Audio)', volume:62 },
+  busy: { notice:{ title:'串口被其他程序占用', text:'COM10 正被另一个程序打开，本程序无法连接设备。',
+      steps:['关闭串口监视器、Arduino IDE 等正在使用 COM10 的程序','关闭后程序会自动重新连接'] },
+    connState:'err', connText:'无法连接', connSub:'COM10 被占用', output:'扬声器 (Realtek Audio)', volume:62 },
+};
+/* 只有带 #状态名 打开时才显示示例数据；程序里运行时等待 window.render() 推送真实状态 */
+const show = () => { const d = DEMO[location.hash.slice(1)]; if (d) window.render(d); };
+window.addEventListener('hashchange', show); show();
+</script>
+</body>
+</html>

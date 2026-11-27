@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP32 多媒体控制器 UI 原型（480×320 横屏）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <div>
+    <div class="device">
+      <div class="screen-wrap" id="screenWrap">
+        <div class="screen" id="screen">
+          <div class="card-stage" id="cardStage"></div>
+          <div class="pages">
+            <section class="page active" data-page="music"></section>
+            <section class="page" data-page="system">
+              <div class="phead"><b>系统</b><span class="dots" data-dots></span></div>
+              <div class="sys" id="sys"></div>
+            </section>
+            <section class="page" data-page="settings">
+              <div class="phead"><b>设置</b><span class="dots" data-dots></span></div>
+              <!-- 触屏设置：所有按钮高度 ≥ 44px（真机约 6.8mm），选项全部摊开，点一下就选中，不用下拉菜单 -->
+              <div class="settings">
+                <div class="slider" id="bright" data-v="80"><i></i><span class="s-l">亮度</span><b class="s-v">80%</b></div>
+                <div class="tile"><small>封面</small><div class="seg" data-set="cover"><span data-v="classic" class="on">经典封面</span><span data-v="immersive">沉浸封面</span></div></div>
+                <div class="tiles">
+                  <div class="tile"><small>背景</small><div class="seg" data-set="bg"><span data-v="blur" class="on">模糊</span><span data-v="color">纯色</span></div></div>
+                  <div class="tile"><small>灵敏度</small><div class="seg" data-set="sens"><span data-v="0.5">低</span><span data-v="1" class="on">中</span><span data-v="1.5">高</span></div></div>
+                  <div class="tile"><small>提示音</small><div class="seg" data-set="sound"><span data-v="1" class="on">开</span><span data-v="0">关</span></div></div>
+                  <div class="tile"><small>息屏</small><div class="seg" data-set="sleep"><span data-v="1">1分</span><span data-v="5" class="on">5分</span><span data-v="0">从不</span></div></div>
+                </div>
+              </div>
+              <div class="gbtn" data-act="guide" title="手势说明">?</div>
+            </section>
+          </div>
+          <div class="sub-clock" id="clock">--:--</div>
+          <!-- 状态角标：只在异常时出现 -->
+          <div class="badges"><span id="linkState" class="badge hidden">未连接</span><span id="muteIcon" class="badge hidden">静音</span></div>
+          <div class="overlay cap tap-fb" id="tapFb"></div>
+          <div class="overlay vol-hud" id="volHud">
+            <div class="v-top"><span id="volIcon">音量</span><b id="volNum">40%</b></div>
+            <div class="vol-bar"><i id="volBar"></i></div>
+          </div>
+          <div class="overlay cap track-hint" id="trackHint"></div>
+          <!-- 单指长按 0.5s 弹出：左右滑到两侧切页，不滑直接松手 = 详情（音乐页）/ 取消 -->
+          <div class="overlay pager" id="pager">
+            <div class="pg-side pg-l" id="pgL"></div>
+            <div class="pg-mid"><b id="pgCur">音乐</b><span class="dots" data-dots></span><small id="pgTip"></small></div>
+            <div class="pg-side pg-r" id="pgR"></div>
+          </div>
+          <div class="overlay page-dots" id="pageDots"><span class="dots" data-dots></span></div>
+          <div class="overlay guide" id="guide">
+            <div class="g-title">手势说明</div>
+            <div class="g-row"><b>双指 ← →</b><span>调音量</span></div>
+            <div class="g-row"><b>双指 ↓ / ↑</b><span>下一首 / 上一首</span></div>
+            <div class="g-row"><b>单指 点一下</b><span>暂停 / 播放</span></div>
+            <div class="g-row"><b>双指 点两下</b><span>静音</span></div>
+            <div class="g-row"><b>长按后 ← →</b><span>切换页面</span></div>
+            <div class="g-row"><b>长按后 松手</b><span>歌曲详情</span></div>
+            <div class="g-foot">点任意处关闭</div>
+          </div>
+          <div class="fingers" id="fingers"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <aside class="panel">
+    <h2>模拟操作</h2>
+    <p class="tip">鼠标模拟：<b>按住 Shift + 拖动</b> = 双指拖动；<b>Shift + 单击</b> = 双指轻点；<b>Shift + 快速点两下</b> = 双指双击；普通单击 = 单指轻点。触摸屏可直接用两根手指。</p>
+    <div class="btns">
+      <button data-act="prev">双指 ↑ 上一首</button>
+      <button data-act="next">双指 ↓ 下一首</button>
+      <button data-act="voldown">双指 ← 音量-</button>
+      <button data-act="volup">双指 → 音量+</button>
+      <button data-act="mute">双指双击 静音</button>
+      <button data-act="play">单指轻点 播放/暂停</button>
+      <button data-act="link">切换 电脑连接状态</button>
+      <button data-act="theme">切换 模糊封面 / 封面主色</button>
+      <button data-act="cover">切换 沉浸封面 / 经典封面</button>
+      <button data-act="pageprev">长按 + ← 上一页</button>
+      <button data-act="pagenext">长按 + → 下一页</button>
+      <button data-act="detail">长按 + 松手 歌曲详情</button>
+      <button data-act="guide">显示 手势引导</button>
+    </div>
+    <p class="tip">鼠标按住屏幕任意处 0.5 秒 = 长按：出现左右提示后，按住往左/右拖到两侧松手就切页；不拖直接松手 = 歌曲详情（音乐页）。</p>
+    <p class="tip">键盘：↑↓ 切歌，←→ 音量，[ ] 切页，M 静音，空格 播放/暂停，T 背景模式，C 封面显示，D 详情，G 引导。</p>
+    <label class="tip">预览缩放
+      <select id="scale">
+        <option value="real:24:1920">真机尺寸（24 寸 1080p 显示器）</option>
+        <option value="real:27:2560">真机尺寸（27 寸 2K 显示器）</option>
+        <option value="real:27:3840">真机尺寸（27 寸 4K 显示器）</option>
+        <option value="1">1×（每像素 1:1）</option><option value="1.5" selected>1.5×</option><option value="2">2×</option>
+      </select>
+    </label>
+    <p class="tip">选"真机尺寸"并按你的显示器选档，屏幕上看到的大小约等于实物（7.4 × 4.9 cm）。</p>
+    <h2>手势日志</h2>
+    <ul class="log" id="log"></ul>
+  </aside>
+</div>
+<script src="palette.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+menu "XPowersLib"
+    config XPOWERS_ESP_IDF_NEW_API
+        bool "Use ESP-IDF I2C master driver"
+        default y
+endmenu

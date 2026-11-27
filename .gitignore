@@ -1,0 +1,12 @@
+.venv/
+.vendor/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+firmware/managed_components/
+firmware/sdkconfig
+firmware/sdkconfig.old
+*.log
+backups/
